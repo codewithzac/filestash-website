@@ -164,4 +164,41 @@ ln -s /etc/nginx/sites-available/filestash.conf /etc/nginx/sites-enabled/filesta
 nginx -t && service nginx restart
 ```
 
+A sample configuration for Apache:
+```
+# Change the environment variable to the domain you want to use
+# Debian/Ubuntu uses /etc/apache2/envvars, other distributions may use other files
+echo 'export FILESTASH_DOMAIN=demo.filestash.app' >> /etc/apache2/envvars
+
+cat > /etc/apache2/sites-available/filestash.conf <<EOF
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+  ServerName ${FILESTASH_DOMAIN}
+  ServerAdmin hostmaster@example.com
+
+  # Log directory needs to exist - create if needed
+  ErrorLog /var/log/apache2/${FILESTASH_DOMAIN}/error.log
+  CustomLog /var/log/apache2/${FILESTASH_DOMAIN}/access.log combined
+
+  ProxyPreserveHost On
+  ProxyPass / http://localhost:8334/
+  ProxyPassReverse / http://localhost:8334/
+
+  # This is only needed if you've set X-Content-Type-Options: "nosniff"
+  Header unset X-Content-Type-Options
+
+  # This is needed if you want to configure HSTS
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains;"
+
+Include /etc/letsencrypt/options-ssl-apache.conf
+SSLCertificateFile /etc/letsencrypt/live/${FILESTASH_DOMAIN}/fullchain.pem
+SSLCertificateKeyFile /etc/letsencrypt/live/${FILESTASH_DOMAIN}/privkey.pem
+</VirtualHost>
+</IfModule>
+EOF
+
+a2ensite /etc/apache2/sites-available/filestash.conf
+systemctl restart apache2
+```
+
 **Note**: Resist the temptation of using gzip and other caching mechanism at the reverse proxy level, you would waste valuable CPU cycles adding latency and increasing the bandwith usage, creating issues with cache invalidation. Filestash is already doing its best at compile time optimising at a level no reverse proxy could ever do with a few lines of configuration and no deep knowledge of the underlying service.
